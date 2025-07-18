@@ -13,15 +13,17 @@ data:
     #!/bin/sh
     IMAGES_DIR=/demo/data/
     PROJECT_NAME=image-extract
-    IMAGE-EXPORT-NAME=win2k19-template
-    DELETE-VM="--delete-vme"
+    IMAGE_EXPORT_NAME=win2k19-template
+    DELETE_VM="--DELETE_VMe"
+    PVC_NAME=
+    mkdir -p ${IMAGES_DIR}
     echo "List the content of the export folder"
     ls -la ${IMAGES_DIR}
     echo "switching to the project ${PROJECT_NAME}"
     oc project ${PROJECT_NAME}
     echo "starting the process of extracting the disk"
-    virtctl vmexport create ${IMAGE-EXPORT-NAME} --pvc ${IMAGE-EXPORT-NAME}
-    virtctl vmexport download ${IMAGE-EXPORT-NAME} --output ${IMAGES_DIR}/${IMAGE-EXPORT-NAME}.gz --insecure --pvc ${NAMESPACE}/${PVC_NAME} ${DELETE-VM}
+    virtctl vmexport create ${IMAGE_EXPORT_NAME} --pvc ${PVC_NAME}
+    virtctl vmexport download ${IMAGE_EXPORT_NAME} --output ${IMAGES_DIR}/${IMAGE_EXPORT_NAME}.gz --insecure --pvc ${PVC_NAME}
     echo "List the content of the export folder"
     ls -la ${IMAGES_DIR}
 ---
