@@ -33,6 +33,13 @@ metadata:
   name: image-extract-sa
   namespace: image-extract
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-win2k19-template
+stringData:
+  token: oijnbgt543sfgh9
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
