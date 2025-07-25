@@ -1,0 +1,106 @@
+--- 
+- hosts: localhost
+  vars:
+    images_dir: "/demo/data/"
+    project_name: "image-extract"
+    image_export_name: "win2k19-template"
+    pvc_name: "pvc123"
+    cm_name: "os-image-extract-script"
+    job_name: "os-image-extract"
+    role_name: "image-extract-admin"
+    container_image_name: "'registry.redhat.io/web-terminal/web-terminal-tooling-rhel9@sha256:56d0e658242cc58de43792b658cad00978bb26acca8f8c52f9a6efaae0319306'"
+
+  tasks:
+    - name: Create the OCP project "{{ project_name }}"
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          apiVersion: project.openshift.io/v1
+          kind: Project
+          metadata:
+            name: "{{ project_name }}"
+
+    - name: Create the servie Account "{{ sa_name }}" to be used by the automation
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: "{{ sa_name }}-sa"
+            namespace: "{{ project_name }}"
+
+    - name: Create the roleBinding {{ role_name }} for the service Account {{ sa_name }}
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: RoleBinding
+          metadata:
+            name: "{{ role_name }}"
+            namespace: "{{ project_name }}"
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: admin
+          subjects:
+          - kind: ServiceAccount
+            name: "{{ sa_name }}-sa"
+            namespace: "{{ project_name }}"
+
+    - name: Create a configMap called os-image-extract-script within the project project_name image-extract
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          kind: ConfigMap
+          apiVersion: v1
+          metadata:
+            name: "{{ cm_name }}"
+            namespace: "{{ project_name }}"
+          data:
+            import-script.sh: |
+              #!/bin/sh
+              mkdir -p {{ images_dir }}
+              echo "List the content of the export folder"
+              ls -la {{ images_dir }}
+              echo "switching to the project {{ project_name }}"
+              oc project "{{ project_name }}"
+              echo "starting the process of extracting the disk"
+              virtctl vmexport create {{ image_export_name }} --pvc {{ pvc_name }}
+              virtctl vmexport download {{ image_export_name }} --output {{ images_dir }}/{{ image_export_name }}.gz --insecure --pvc {{ pvc_name }}
+              echo "List the content of the export folder"
+              ls -la {{ images_dir }}
+
+    - name: Creating the exracting job "{{ job_name }}" within the project "{{ project_name }}"
+      redhat.openshift.k8s:
+        state: present
+        resource_definition:
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: "{{ job_name }}-{{ ansible_date_time.date }}"
+            namespace: "{{ project_name }}"
+          spec:
+            template:
+              spec:
+                volumes:
+                - name: script
+                  configMap:
+                    name: "{{ cm_name }}"
+                - name: nfs-data
+                  persistentVolumeClaim:
+                    claimName: nfs-pvc
+                serviceAccountName: image-extract-sa
+                containers:
+                  - name: "{{ job_name }}"
+                    image: "{{ container_image_name }}"
+                    volumeMounts:
+                      - name: script
+                        mountPath: /usr/os-image-extract
+                      - name: nfs-data
+                        mountPath: /demo/data
+                    command:
+                    - /bin/sh
+                    - /usr/os-image-extract/import-script.sh
+                    imagePullPolicy: IfNotPresent
+                restartPolicy: Never
