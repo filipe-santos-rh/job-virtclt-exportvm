@@ -8,12 +8,17 @@
     cm_name: "os-image-extract-script"
     job_name: "os-image-extract"
     role_name: "image-extract-admin"
+    sa_name: "image-extract"
     container_image_name: "'registry.redhat.io/web-terminal/web-terminal-tooling-rhel9@sha256:56d0e658242cc58de43792b658cad00978bb26acca8f8c52f9a6efaae0319306'"
+    api_srv_url: "https://api.example.ocp.com:6443"
+    cluster_token: "authentication_token"
 
   tasks:
     - name: Create the OCP project "{{ project_name }}"
       redhat.openshift.k8s:
         state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
         resource_definition:
           apiVersion: project.openshift.io/v1
           kind: Project
@@ -23,6 +28,8 @@
     - name: Create the servie Account "{{ sa_name }}" to be used by the automation
       redhat.openshift.k8s:
         state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
         resource_definition:
           apiVersion: v1
           kind: ServiceAccount
@@ -33,6 +40,8 @@
     - name: Create the roleBinding {{ role_name }} for the service Account {{ sa_name }}
       redhat.openshift.k8s:
         state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
         resource_definition:
           apiVersion: rbac.authorization.k8s.io/v1
           kind: RoleBinding
@@ -51,6 +60,8 @@
     - name: Create a configMap called os-image-extract-script within the project project_name image-extract
       redhat.openshift.k8s:
         state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
         resource_definition:
           kind: ConfigMap
           apiVersion: v1
@@ -71,9 +82,28 @@
               echo "List the content of the export folder"
               ls -la {{ images_dir }}
 
+    # - name: Generate random string to be used as a token with a length of 14
+    #   ansible.builtin.debug:
+    #     var: lookup('community.general.random_string', upper=false, length=14)
+
     - name: Creating the exracting job "{{ job_name }}" within the project "{{ project_name }}"
       redhat.openshift.k8s:
         state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
+        resource_definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "secret-{{ job_name }}-{{ ansible_date_time.date }}"
+          stringData:
+            token: lookup('community.general.random_string', upper=false, length=14)
+
+    - name: Creating the exracting job "{{ job_name }}" within the project "{{ project_name }}"
+      redhat.openshift.k8s:
+        state: present
+        host: "{{ api_srv_url }}"
+        api_key: "{{ cluster_token }}"
         resource_definition:
           apiVersion: batch/v1
           kind: Job
@@ -90,7 +120,7 @@
                 - name: nfs-data
                   persistentVolumeClaim:
                     claimName: nfs-pvc
-                serviceAccountName: image-extract-sa
+                serviceAccountName: "{{ sa_name }}-sa"
                 containers:
                   - name: "{{ job_name }}"
                     image: "{{ container_image_name }}"
